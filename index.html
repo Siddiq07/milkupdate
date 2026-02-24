@@ -4,16 +4,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Milk Daily Summary</title>
 
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
 <style>
 body{
     font-family: Arial, sans-serif;
     background:#f4f6f8;
     padding:20px;
 }
-h2{
-    text-align:center;
-    margin-bottom:20px;
-}
+h2{text-align:center;margin-bottom:20px;}
 .top-bar{
     display:flex;
     gap:10px;
@@ -40,9 +40,6 @@ button{
     border-radius:8px;
     box-shadow:0 2px 6px rgba(0,0,0,0.1);
 }
-.client h3{
-    margin-bottom:10px;
-}
 table{
     width:100%;
     border-collapse:collapse;
@@ -52,23 +49,9 @@ th, td{
     padding:6px;
     text-align:center;
 }
-th{
-    background:#eeeeee;
-}
-.qty{
-    width:60px;
-}
-.unit{
-    width:60px;
-}
-@media print{
-    button, .top-bar{
-        display:none;
-    }
-    body{
-        background:white;
-    }
-}
+th{background:#eeeeee;}
+.qty{width:60px;}
+.unit{width:60px;}
 </style>
 </head>
 
@@ -80,45 +63,75 @@ th{
     <input type="text" id="clientName" placeholder="Enter Client Name">
     <button onclick="addClient()">+ Add Client</button>
     <button onclick="sendWhatsApp()">📲 Send WhatsApp</button>
-    <button onclick="window.print()">🖨 Save PDF</button>
 </div>
 
 <div id="clients"></div>
 
 <script>
 
+// 🔥 Firebase Config
+const firebaseConfig = {
+    databaseURL: "https://milk-7bb9b-default-rtdb.firebaseio.com"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// Add Client
 function addClient(){
     let name = document.getElementById("clientName").value.trim();
     if(!name) return alert("Enter client name");
 
-    let container = document.getElementById("clients");
-
-    container.innerHTML += `
-    <div class="client">
-        <h3>${name}</h3>
-        <table>
-            <tr>
-                <th>Product</th>
-                <th>Qty</th>
-                <th>Unit</th>
-            </tr>
-            ${row("Green")}
-            ${row("Blue")}
-            ${row("Red")}
-            ${row("Curd")}
-            ${row("Thick Curd")}
-        </table>
-    </div>
-    `;
+    db.ref("clients").push({
+        name:name,
+        green:0,
+        blue:0,
+        red:0,
+        curd:0,
+        thick:0
+    });
 
     document.getElementById("clientName").value="";
 }
 
-function row(product){
+// Real-time listener
+db.ref("clients").on("value", snapshot => {
+    let data = snapshot.val();
+    let container = document.getElementById("clients");
+    container.innerHTML="";
+
+    for(let id in data){
+        let c = data[id];
+
+        container.innerHTML += `
+        <div class="client">
+            <h3>${c.name}</h3>
+            <table>
+                <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Unit</th>
+                </tr>
+                ${row("Green", c.green, id, "green")}
+                ${row("Blue", c.blue, id, "blue")}
+                ${row("Red", c.red, id, "red")}
+                ${row("Curd", c.curd, id, "curd")}
+                ${row("Thick Curd", c.thick, id, "thick")}
+            </table>
+        </div>
+        `;
+    }
+});
+
+// Row generator
+function row(product, value, id, field){
     return `
     <tr>
         <td>${product}</td>
-        <td><input type="number" class="qty" min="0" value="0"></td>
+        <td>
+            <input type="number" class="qty" value="${value}" 
+            onchange="updateValue('${id}','${field}',this.value)">
+        </td>
         <td>
             <select class="unit">
                 <option value="B">B</option>
@@ -129,52 +142,47 @@ function row(product){
     `;
 }
 
+// Update quantity in database
+function updateValue(id, field, value){
+    db.ref("clients/"+id+"/"+field).set(Number(value));
+}
+
+// WhatsApp Sender
 function sendWhatsApp(){
 
-    let clients = document.querySelectorAll(".client");
-    let message = "";
+    db.ref("clients").once("value").then(snapshot => {
 
-    let today = new Date();
-    let date = today.toLocaleDateString("en-GB");
+        let data = snapshot.val();
+        let message="";
 
-    message += "*Milk Report*\n";
-    message += "Date: " + date + "\n\n";
+        let today = new Date();
+        let date = today.toLocaleDateString("en-GB");
 
-    clients.forEach(client => {
+        message += "*Milk Report*\n";
+        message += "Date: "+date+"\n\n";
 
-        let name = client.querySelector("h3").innerText;
-        let clientData = "";
+        for(let id in data){
 
-        let rows = client.querySelectorAll("tr");
+            let c = data[id];
+            let clientData="";
 
-        rows.forEach((row, index) => {
-            if(index === 0) return;
+            if(c.green>0) clientData+="Green "+c.green+" Box\n";
+            if(c.blue>0) clientData+="Blue "+c.blue+" Box\n";
+            if(c.red>0) clientData+="Red "+c.red+" Box\n";
+            if(c.curd>0) clientData+="Curd "+c.curd+" Litre\n";
+            if(c.thick>0) clientData+="Thick Curd "+c.thick+" Litre\n";
 
-            let product = row.cells[0].innerText;
-            let qty = row.querySelector(".qty").value;
-            let unit = row.querySelector(".unit").value;
-
-            if(qty > 0){
-                let fullUnit = (unit === "B") ? "Box" : "Litre";
-                clientData += product + " " + qty + " " + fullUnit + "\n";
+            if(clientData!=""){
+                message+="*"+c.name+"*\n";
+                message+=clientData+"\n";
             }
-        });
-
-        if(clientData !== ""){
-            message += "*" + name + "*\n";
-            message += clientData + "\n";
         }
 
+        let phone="8497083674";
+        let url="https://wa.me/91"+phone+"?text="+encodeURIComponent(message);
+        window.open(url,"_blank");
+
     });
-
-    if(message.trim() === "*Milk Report*"){
-        alert("No data to send");
-        return;
-    }
-
-    let phone = "8497083674";
-    let url = "https://wa.me/91" + phone + "?text=" + encodeURIComponent(message);
-    window.open(url, "_blank");
 }
 
 </script>
