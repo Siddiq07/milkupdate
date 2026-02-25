@@ -51,7 +51,7 @@ th, td{
 }
 th{background:#eeeeee;}
 .qty{width:60px;}
-.unit{width:60px;}
+.unit{width:70px;}
 </style>
 </head>
 
@@ -84,23 +84,25 @@ function addClient(){
 
     db.ref("clients").push({
         name:name,
-        green:0,
-        blue:0,
-        red:0,
-        curd:0,
-        thick:0
+        green:{qty:0, unit:"B"},
+        blue:{qty:0, unit:"B"},
+        red:{qty:0, unit:"B"},
+        curd:{qty:0, unit:"L"},
+        thick:{qty:0, unit:"L"}
     });
 
     document.getElementById("clientName").value="";
 }
 
-// Real-time listener
+// Real-time display
 db.ref("clients").on("value", snapshot => {
+
     let data = snapshot.val();
     let container = document.getElementById("clients");
     container.innerHTML="";
 
     for(let id in data){
+
         let c = data[id];
 
         container.innerHTML += `
@@ -123,31 +125,41 @@ db.ref("clients").on("value", snapshot => {
     }
 });
 
-// Row generator
-function row(product, value, id, field){
+// Create row
+function row(product, data, id, field){
+
+    let qty = data?.qty || 0;
+    let unit = data?.unit || "B";
+
     return `
     <tr>
         <td>${product}</td>
         <td>
-            <input type="number" class="qty" value="${value}" 
-            onchange="updateValue('${id}','${field}',this.value)">
+            <input type="number" class="qty" value="${qty}" 
+            onchange="updateQty('${id}','${field}',this.value)">
         </td>
         <td>
-            <select class="unit">
-                <option value="B">B</option>
-                <option value="L">L</option>
+            <select class="unit"
+            onchange="updateUnit('${id}','${field}',this.value)">
+                <option value="B" ${unit==="B"?"selected":""}>B</option>
+                <option value="L" ${unit==="L"?"selected":""}>L</option>
             </select>
         </td>
     </tr>
     `;
 }
 
-// Update quantity in database
-function updateValue(id, field, value){
-    db.ref("clients/"+id+"/"+field).set(Number(value));
+// Update quantity
+function updateQty(id, field, value){
+    db.ref("clients/"+id+"/"+field+"/qty").set(Number(value));
 }
 
-// WhatsApp Sender
+// Update unit
+function updateUnit(id, field, value){
+    db.ref("clients/"+id+"/"+field+"/unit").set(value);
+}
+
+// WhatsApp
 function sendWhatsApp(){
 
     db.ref("clients").once("value").then(snapshot => {
@@ -166,11 +178,19 @@ function sendWhatsApp(){
             let c = data[id];
             let clientData="";
 
-            if(c.green>0) clientData+="Green "+c.green+" Box\n";
-            if(c.blue>0) clientData+="Blue "+c.blue+" Box\n";
-            if(c.red>0) clientData+="Red "+c.red+" Box\n";
-            if(c.curd>0) clientData+="Curd "+c.curd+" Litre\n";
-            if(c.thick>0) clientData+="Thick Curd "+c.thick+" Litre\n";
+            for(let product in c){
+
+                if(product==="name") continue;
+
+                let item = c[product];
+                if(item.qty > 0){
+
+                    let fullUnit = item.unit==="B" ? "Box" : "Litre";
+                    let productName = product.charAt(0).toUpperCase()+product.slice(1);
+
+                    clientData += productName+" "+item.qty+" "+fullUnit+"\n";
+                }
+            }
 
             if(clientData!=""){
                 message+="*"+c.name+"*\n";
@@ -178,7 +198,7 @@ function sendWhatsApp(){
             }
         }
 
-        let phone="9844615101";
+        let phone="9449244108";
         let url="https://wa.me/91"+phone+"?text="+encodeURIComponent(message);
         window.open(url,"_blank");
 
