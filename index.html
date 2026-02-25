@@ -4,6 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Milk Report</title>
 
+<!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -69,13 +70,23 @@ th{background:#eeeeee;}
 
 <script>
 
-// 🔥 Firebase Config
-firebase.initializeApp({
-    databaseURL: "https://milk-7bb9b-default-rtdb.firebaseio.com"
-});
+// 🔥 YOUR FIREBASE CONFIG
+const firebaseConfig = {
+  apiKey: "AIzaSyCnLHWvXBIBFaQ9s6S_gCN9jJFG6oWDetk",
+  authDomain: "milk-7bb9b.firebaseapp.com",
+  databaseURL: "https://milk-7bb9b-default-rtdb.firebaseio.com",
+  projectId: "milk-7bb9b",
+  storageBucket: "milk-7bb9b.firebasestorage.app",
+  messagingSenderId: "382921009272",
+  appId: "1:382921009272:web:0b34b2ce69b791e26c258d",
+  measurementId: "G-HLCCYNKRLQ"
+};
+
+firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// ➕ Add Client
+
+// ➕ ADD CLIENT
 function addClient(){
     let name = document.getElementById("clientName").value.trim();
     if(!name) return alert("Enter client name");
@@ -94,7 +105,8 @@ function addClient(){
     document.getElementById("clientName").value="";
 }
 
-// 🔄 Real-time Load
+
+// 🔄 REALTIME LOAD
 db.ref("clients").on("value", snapshot=>{
     let data = snapshot.val();
     let container = document.getElementById("clients");
@@ -127,7 +139,8 @@ db.ref("clients").on("value", snapshot=>{
     }
 });
 
-// 🧾 Row Builder
+
+// 🧾 BUILD ROW
 function row(name, data, id, key){
     return `
     <tr>
@@ -147,17 +160,19 @@ function row(name, data, id, key){
     `;
 }
 
-// 🔄 Update Qty
+
+// 🔄 UPDATE QTY
 function updateQty(id,key,value){
     db.ref("clients/"+id+"/products/"+key+"/qty").set(Number(value));
 }
 
-// 🔄 Update Unit
+// 🔄 UPDATE UNIT
 function updateUnit(id,key,value){
     db.ref("clients/"+id+"/products/"+key+"/unit").set(value);
 }
 
-// 📲 WhatsApp Sender (FIXED ORDER)
+
+// 📲 SEND WHATSAPP (GREEN ALWAYS FIRST)
 function sendWhatsApp(){
 
     db.ref("clients").once("value").then(snapshot=>{
@@ -177,7 +192,6 @@ function sendWhatsApp(){
             let p = c.products;
             let block="";
 
-            // 🔥 FIXED ORDER
             let order = ["green","blue","red","curd","thick"];
 
             order.forEach(key => {
@@ -199,7 +213,7 @@ function sendWhatsApp(){
             }
         }
 
-        let url="https://wa.me/919449244108?text="+encodeURIComponent(message);
+        let url="https://wa.me/918497083674?text="+encodeURIComponent(message);
         window.open(url,"_blank");
 
     });
