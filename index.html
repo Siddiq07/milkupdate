@@ -2,18 +2,18 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Milk Daily Summary</title>
+<title>Milk Report</title>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <style>
 body{
-    font-family: Arial, sans-serif;
-    background:#f4f6f8;
+    font-family: Arial;
+    background:#f5f7fa;
     padding:20px;
 }
-h2{text-align:center;margin-bottom:20px;}
+h2{text-align:center;}
 .top-bar{
     display:flex;
     gap:10px;
@@ -28,7 +28,7 @@ input[type="text"]{
 button{
     padding:8px 15px;
     border:none;
-    background:#2e7d32;
+    background:#1b5e20;
     color:white;
     border-radius:5px;
     cursor:pointer;
@@ -70,40 +70,42 @@ th{background:#eeeeee;}
 <script>
 
 // 🔥 Firebase Config
-const firebaseConfig = {
+firebase.initializeApp({
     databaseURL: "https://milk-7bb9b-default-rtdb.firebaseio.com"
-};
-
-firebase.initializeApp(firebaseConfig);
+});
 const db = firebase.database();
 
-// Add Client
+// ➕ Add Client
 function addClient(){
     let name = document.getElementById("clientName").value.trim();
     if(!name) return alert("Enter client name");
 
     db.ref("clients").push({
         name:name,
-        green:{qty:0, unit:"B"},
-        blue:{qty:0, unit:"B"},
-        red:{qty:0, unit:"B"},
-        curd:{qty:0, unit:"L"},
-        thick:{qty:0, unit:"L"}
+        products:{
+            green:{qty:0, unit:"B"},
+            blue:{qty:0, unit:"B"},
+            red:{qty:0, unit:"B"},
+            curd:{qty:0, unit:"L"},
+            thick:{qty:0, unit:"L"}
+        }
     });
 
     document.getElementById("clientName").value="";
 }
 
-// Real-time display
-db.ref("clients").on("value", snapshot => {
-
+// 🔄 Real-time Load
+db.ref("clients").on("value", snapshot=>{
     let data = snapshot.val();
     let container = document.getElementById("clients");
     container.innerHTML="";
 
+    if(!data) return;
+
     for(let id in data){
 
         let c = data[id];
+        let p = c.products;
 
         container.innerHTML += `
         <div class="client">
@@ -114,92 +116,90 @@ db.ref("clients").on("value", snapshot => {
                     <th>Qty</th>
                     <th>Unit</th>
                 </tr>
-                ${row("Green", c.green, id, "green")}
-                ${row("Blue", c.blue, id, "blue")}
-                ${row("Red", c.red, id, "red")}
-                ${row("Curd", c.curd, id, "curd")}
-                ${row("Thick Curd", c.thick, id, "thick")}
+                ${row("Green", p.green, id, "green")}
+                ${row("Blue", p.blue, id, "blue")}
+                ${row("Red", p.red, id, "red")}
+                ${row("Curd", p.curd, id, "curd")}
+                ${row("Thick Curd", p.thick, id, "thick")}
             </table>
         </div>
         `;
     }
 });
 
-// Create row
-function row(product, data, id, field){
-
-    let qty = data?.qty || 0;
-    let unit = data?.unit || "B";
-
+// 🧾 Row Builder
+function row(name, data, id, key){
     return `
     <tr>
-        <td>${product}</td>
+        <td>${name}</td>
         <td>
-            <input type="number" class="qty" value="${qty}" 
-            onchange="updateQty('${id}','${field}',this.value)">
+            <input type="number" class="qty" value="${data.qty}"
+            onchange="updateQty('${id}','${key}',this.value)">
         </td>
         <td>
             <select class="unit"
-            onchange="updateUnit('${id}','${field}',this.value)">
-                <option value="B" ${unit==="B"?"selected":""}>B</option>
-                <option value="L" ${unit==="L"?"selected":""}>L</option>
+            onchange="updateUnit('${id}','${key}',this.value)">
+                <option value="B" ${data.unit==="B"?"selected":""}>B</option>
+                <option value="L" ${data.unit==="L"?"selected":""}>L</option>
             </select>
         </td>
     </tr>
     `;
 }
 
-// Update quantity
-function updateQty(id, field, value){
-    db.ref("clients/"+id+"/"+field+"/qty").set(Number(value));
+// 🔄 Update Qty
+function updateQty(id,key,value){
+    db.ref("clients/"+id+"/products/"+key+"/qty").set(Number(value));
 }
 
-// Update unit
-function updateUnit(id, field, value){
-    db.ref("clients/"+id+"/"+field+"/unit").set(value);
+// 🔄 Update Unit
+function updateUnit(id,key,value){
+    db.ref("clients/"+id+"/products/"+key+"/unit").set(value);
 }
 
-// WhatsApp
+// 📲 WhatsApp Sender (FIXED ORDER)
 function sendWhatsApp(){
 
-    db.ref("clients").once("value").then(snapshot => {
+    db.ref("clients").once("value").then(snapshot=>{
 
         let data = snapshot.val();
-        let message="";
+        if(!data) return alert("No data");
 
-        let today = new Date();
-        let date = today.toLocaleDateString("en-GB");
+        let message="";
+        let today = new Date().toLocaleDateString("en-GB");
 
         message += "*Milk Report*\n";
-        message += "Date: "+date+"\n\n";
+        message += "Date: "+today+"\n\n";
 
         for(let id in data){
 
             let c = data[id];
-            let clientData="";
+            let p = c.products;
+            let block="";
 
-            for(let product in c){
+            // 🔥 FIXED ORDER
+            let order = ["green","blue","red","curd","thick"];
 
-                if(product==="name") continue;
+            order.forEach(key => {
 
-                let item = c[product];
-                if(item.qty > 0){
+                if(p[key] && p[key].qty > 0){
 
-                    let fullUnit = item.unit==="B" ? "Box" : "Litre";
-                    let productName = product.charAt(0).toUpperCase()+product.slice(1);
+                    let unit = p[key].unit==="B" ? "Box" : "Litre";
+                    let name = key==="thick" ? "Thick Curd" :
+                               key.charAt(0).toUpperCase()+key.slice(1);
 
-                    clientData += productName+" "+item.qty+" "+fullUnit+"\n";
+                    block += name+" "+p[key].qty+" "+unit+"\n";
                 }
-            }
 
-            if(clientData!=""){
-                message+="*"+c.name+"*\n";
-                message+=clientData+"\n";
+            });
+
+            if(block!=""){
+                message += "*"+c.name+"*\n";
+                message += block+"\n";
             }
         }
 
-        let phone="9449244108";
-        let url="https://wa.me/91"+phone+"?text="+encodeURIComponent(message);
+        let url="https://wa.me/919449244108?text="+encodeURIComponent(message);
         window.open(url,"_blank");
 
     });
