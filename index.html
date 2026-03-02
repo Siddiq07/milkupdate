@@ -14,6 +14,7 @@ h2{text-align:center;}
 table{width:100%;border-collapse:collapse;margin-top:10px;}
 th,td{border:1px solid #ddd;padding:6px;text-align:center;}
 input{width:70px;padding:4px;}
+select{padding:4px;}
 button{padding:8px 15px;background:#1b5e20;color:white;border:none;border-radius:5px;cursor:pointer;margin-top:10px;}
 .summary{background:#fff3e0;padding:10px;border-radius:8px;margin-bottom:15px;}
 </style>
@@ -65,7 +66,6 @@ button{padding:8px 15px;background:#1b5e20;color:white;border:none;border-radius
 
 <script>
 
-// 🔥 FIREBASE CONFIG
 firebase.initializeApp({
   apiKey: "AIzaSyCnLHWvXBIBFaQ9s6S_gCN9jJFG6oWDetk",
   authDomain: "milk-7bb9b.firebaseapp.com",
@@ -75,35 +75,27 @@ firebase.initializeApp({
 
 const db = firebase.database();
 
-// 🔥 PRODUCT-WISE CONVERSION
 const BOX_LITRE = {
-  green: 12,
-  blue: 12,
-  red: 12,
-  curd: 15,   // ✅ Curd special
-  thick: 12
+  green:12,
+  blue:12,
+  red:12,
+  curd:15,
+  thick:12
 };
 
 function todayKey(){
   return new Date().toLocaleDateString("en-GB");
 }
 
-// =====================
-// STOCK CONVERSION
-// =====================
+// ================= STOCK =================
 function convertStock(key){
   let box = Number(document.getElementById("stock_"+key+"_box").value)||0;
   document.getElementById("stock_"+key+"_litre").value = box * BOX_LITRE[key];
 }
-
 function reverseStock(key){
   let litre = Number(document.getElementById("stock_"+key+"_litre").value)||0;
   document.getElementById("stock_"+key+"_box").value = (litre / BOX_LITRE[key]).toFixed(2);
 }
-
-// =====================
-// SAVE STOCK
-// =====================
 function saveStock(){
   let stock={
     green:Number(stock_green_litre.value)||0,
@@ -115,41 +107,32 @@ function saveStock(){
   db.ref("dailyReports/"+todayKey()+"/stock").set(stock);
 }
 
-// =====================
-// ADD CLIENT
-// =====================
+// ================= CLIENT =================
 function addClient(){
   let name=document.getElementById("clientName").value.trim();
   if(!name) return;
 
   db.ref("dailyReports/"+todayKey()+"/clients").push({
     name:name,
-    green:{box:0,litre:0},
-    blue:{box:0,litre:0},
-    red:{box:0,litre:0},
-    curd:{box:0,litre:0},
-    thick:{box:0,litre:0}
+    green:{qty:0,unit:"box"},
+    blue:{qty:0,unit:"box"},
+    red:{qty:0,unit:"box"},
+    curd:{qty:0,unit:"box"},
+    thick:{qty:0,unit:"box"}
   });
 
   document.getElementById("clientName").value="";
 }
 
-// =====================
-// UPDATE CLIENT BOX
-// =====================
-function updateBox(id,key,value){
-  let box = Number(value)||0;
-  let litre = box * BOX_LITRE[key];
-
+// Update client
+function updateClient(id,key,qty,unit){
   db.ref("dailyReports/"+todayKey()+"/clients/"+id+"/"+key).set({
-    box:box,
-    litre:litre
+    qty:Number(qty)||0,
+    unit:unit
   });
 }
 
-// =====================
 // REALTIME LOAD
-// =====================
 db.ref("dailyReports/"+todayKey()).on("value",snap=>{
   let data=snap.val();
   if(!data) return;
@@ -175,23 +158,26 @@ db.ref("dailyReports/"+todayKey()).on("value",snap=>{
     for(let id in data.clients){
       let c=data.clients[id];
 
-      for(let p in supplied){
-        supplied[p]+=c[p].litre||0;
-      }
-
       container.innerHTML+=`
       <div class="section">
       <h3>${c.name}</h3>
-      <table>
-      <tr><th>Product</th><th>Box</th><th>Litre</th></tr>
-      ${row("Green",c.green,id,"green")}
-      ${row("Blue",c.blue,id,"blue")}
-      ${row("Red",c.red,id,"red")}
-      ${row("Curd",c.curd,id,"curd")}
-      ${row("Thick",c.thick,id,"thick")}
-      </table>
+      ${clientRow(id,"Green",c.green,"green")}
+      ${clientRow(id,"Blue",c.blue,"blue")}
+      ${clientRow(id,"Red",c.red,"red")}
+      ${clientRow(id,"Curd",c.curd,"curd")}
+      ${clientRow(id,"Thick",c.thick,"thick")}
       </div>
       `;
+
+      for(let p in supplied){
+        let item=c[p];
+        if(item){
+          let litre = item.unit==="box"
+              ? item.qty * BOX_LITRE[p]
+              : item.qty;
+          supplied[p]+=litre;
+        }
+      }
     }
   }
 
@@ -212,19 +198,28 @@ db.ref("dailyReports/"+todayKey()).on("value",snap=>{
   Thick: ${balance.thick}`;
 });
 
-function row(name,data,id,key){
+function clientRow(id,label,data,key){
   return `
+  <table>
   <tr>
-  <td>${name}</td>
-  <td><input value="${data.box}" onchange="updateBox('${id}','${key}',this.value)"></td>
-  <td>${data.litre}</td>
+  <td>${label}</td>
+  <td><input value="${data?.qty||0}"
+      onchange="updateClient('${id}','${key}',this.value,
+      document.getElementById('${id}_${key}_unit').value)"></td>
+  <td>
+    <select id="${id}_${key}_unit"
+      onchange="updateClient('${id}','${key}',
+      document.querySelector('[onchange*=${id}]').value,this.value)">
+      <option value="box" ${data?.unit==="box"?"selected":""}>Box</option>
+      <option value="litre" ${data?.unit==="litre"?"selected":""}>Litre</option>
+    </select>
+  </td>
   </tr>
+  </table>
   `;
 }
 
-// =====================
-// WHATSAPP REPORT
-// =====================
+// ================= WHATSAPP =================
 function sendWhatsApp(){
   db.ref("dailyReports/"+todayKey()).once("value").then(snap=>{
     let data=snap.val();
@@ -237,9 +232,14 @@ function sendWhatsApp(){
       let block="";
 
       ["green","blue","red","curd","thick"].forEach(p=>{
-        if(c[p].box>0){
+        let item=c[p];
+        if(item && item.qty>0){
+          let litre=item.unit==="box"
+              ? item.qty*BOX_LITRE[p]
+              : item.qty;
           block+=p.charAt(0).toUpperCase()+p.slice(1)
-          +" "+c[p].box+" Box ("+c[p].litre+" L)\n";
+          +" "+item.qty+" "+(item.unit==="box"?"Box":"Litre")
+          +" ("+litre+" L)\n";
         }
       });
 
