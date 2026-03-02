@@ -2,64 +2,67 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Milk Business System</title>
+<title>Milk Daily System</title>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <style>
-body{font-family:Arial;background:#f4f6f8;padding:20px;}
+body{
+  font-family:system-ui;
+  background:#eef2f7;
+  padding:20px;
+}
 h2{text-align:center;}
-.section{background:white;padding:15px;margin-bottom:15px;border-radius:8px;}
-table{width:100%;border-collapse:collapse;margin-top:10px;}
-th,td{border:1px solid #ddd;padding:6px;text-align:center;}
-input{width:70px;padding:4px;}
-select{padding:4px;}
-button{padding:8px 15px;background:#1b5e20;color:white;border:none;border-radius:5px;cursor:pointer;margin-top:10px;}
-.summary{background:#fff3e0;padding:10px;border-radius:8px;margin-bottom:15px;}
+.card{
+  background:white;
+  padding:15px;
+  margin-bottom:15px;
+  border-radius:12px;
+  box-shadow:0 4px 10px rgba(0,0,0,0.08);
+}
+.row{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:8px;
+}
+input,select{
+  padding:6px;
+  border:1px solid #ddd;
+  border-radius:6px;
+}
+button{
+  padding:8px 14px;
+  background:#1565c0;
+  color:white;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
+.summary{
+  background:#e3f2fd;
+  padding:10px;
+  border-radius:10px;
+  font-weight:500;
+}
 </style>
 </head>
 <body>
 
-<h2>🥛 Milk Business System</h2>
+<h2>🥛 Milk Daily System</h2>
 
-<!-- STOCK SECTION -->
-<div class="section">
-<h3>Daily Stock</h3>
-<table>
-<tr><th>Product</th><th>Box</th><th>Litre</th></tr>
-
-<tr><td>Green</td>
-<td><input id="stock_green_box" onchange="convertStock('green')"></td>
-<td><input id="stock_green_litre" onchange="reverseStock('green')"></td></tr>
-
-<tr><td>Blue</td>
-<td><input id="stock_blue_box" onchange="convertStock('blue')"></td>
-<td><input id="stock_blue_litre" onchange="reverseStock('blue')"></td></tr>
-
-<tr><td>Red</td>
-<td><input id="stock_red_box" onchange="convertStock('red')"></td>
-<td><input id="stock_red_litre" onchange="reverseStock('red')"></td></tr>
-
-<tr><td>Curd (15L/Box)</td>
-<td><input id="stock_curd_box" onchange="convertStock('curd')"></td>
-<td><input id="stock_curd_litre" onchange="reverseStock('curd')"></td></tr>
-
-<tr><td>Thick</td>
-<td><input id="stock_thick_box" onchange="convertStock('thick')"></td>
-<td><input id="stock_thick_litre" onchange="reverseStock('thick')"></td></tr>
-
-</table>
+<div class="card">
+<h3 id="dateTitle"></h3>
+<div id="stockSection"></div>
 <button onclick="saveStock()">Save Stock</button>
-<button onclick="sendWhatsApp()">📲 Send Report</button>
+<button onclick="sendWhatsApp()">Send Report</button>
 </div>
 
 <div class="summary" id="summary"></div>
 
-<!-- ADD CLIENT -->
-<div class="section">
-<input type="text" id="clientName" placeholder="Add Client Name">
-<button onclick="addClient()">+ Add Client</button>
+<div class="card">
+<input type="text" id="clientName" placeholder="Client Name">
+<button onclick="addClient()">Add Client</button>
 </div>
 
 <div id="clients"></div>
@@ -73,9 +76,9 @@ firebase.initializeApp({
   projectId: "milk-7bb9b"
 });
 
-const db = firebase.database();
-
-const BOX_LITRE = {
+const db=firebase.database();
+const PRODUCTS=["green","blue","red","curd","thick"];
+const BOX_LITRE={
   green:12,
   blue:12,
   red:12,
@@ -83,173 +86,154 @@ const BOX_LITRE = {
   thick:12
 };
 
-function todayKey(){
-  return new Date().toLocaleDateString("en-GB");
-}
+let todayDate=new Date().toLocaleDateString("en-GB");
+document.getElementById("dateTitle").innerText="Date: "+todayDate;
 
-// ================= STOCK =================
-function convertStock(key){
-  let box = Number(document.getElementById("stock_"+key+"_box").value)||0;
-  document.getElementById("stock_"+key+"_litre").value = box * BOX_LITRE[key];
-}
-function reverseStock(key){
-  let litre = Number(document.getElementById("stock_"+key+"_litre").value)||0;
-  document.getElementById("stock_"+key+"_box").value = (litre / BOX_LITRE[key]).toFixed(2);
-}
+// ---------- BUILD STOCK UI (Default B) ----------
+const stockSection=document.getElementById("stockSection");
+
+PRODUCTS.forEach(p=>{
+  stockSection.innerHTML+=`
+  <div class="row">
+    <div>${capitalize(p)}</div>
+    <div>
+      <input id="stock_${p}_qty" value="0">
+      <select id="stock_${p}_unit">
+        <option value="B" selected>B</option>
+        <option value="L">L</option>
+      </select>
+    </div>
+  </div>`;
+});
+
+// ---------- SAVE STOCK ----------
 function saveStock(){
-  let stock={
-    green:Number(stock_green_litre.value)||0,
-    blue:Number(stock_blue_litre.value)||0,
-    red:Number(stock_red_litre.value)||0,
-    curd:Number(stock_curd_litre.value)||0,
-    thick:Number(stock_thick_litre.value)||0
-  };
-  db.ref("dailyReports/"+todayKey()+"/stock").set(stock);
+  let stock={};
+  PRODUCTS.forEach(p=>{
+    stock[p]={
+      qty:Number(document.getElementById("stock_"+p+"_qty").value)||0,
+      unit:document.getElementById("stock_"+p+"_unit").value
+    };
+  });
+  db.ref("reports/"+todayDate+"/stock").set(stock);
 }
 
-// ================= CLIENT =================
+// ---------- ADD CLIENT ----------
 function addClient(){
-  let name=document.getElementById("clientName").value.trim();
+  let name=clientName.value.trim();
   if(!name) return;
 
-  db.ref("dailyReports/"+todayKey()+"/clients").push({
-    name:name,
-    green:{qty:0,unit:"box"},
-    blue:{qty:0,unit:"box"},
-    red:{qty:0,unit:"box"},
-    curd:{qty:0,unit:"box"},
-    thick:{qty:0,unit:"box"}
+  let data={name:name};
+  PRODUCTS.forEach(p=>{
+    data[p]={qty:0,unit:"B"};
   });
 
-  document.getElementById("clientName").value="";
+  db.ref("reports/"+todayDate+"/clients").push(data);
+  clientName.value="";
 }
 
-// Update client
-function updateClient(id,key,qty,unit){
-  db.ref("dailyReports/"+todayKey()+"/clients/"+id+"/"+key).set({
-    qty:Number(qty)||0,
-    unit:unit
+// ---------- UPDATE CLIENT ----------
+function updateClient(id,key){
+  db.ref("reports/"+todayDate+"/clients/"+id+"/"+key).set({
+    qty:Number(document.getElementById(id+"_"+key+"_qty").value)||0,
+    unit:document.getElementById(id+"_"+key+"_unit").value
   });
 }
 
-// REALTIME LOAD
-db.ref("dailyReports/"+todayKey()).on("value",snap=>{
-  let data=snap.val();
-  if(!data) return;
-
-  let stock=data.stock||{};
-  stock_green_litre.value=stock.green||0;
-  stock_blue_litre.value=stock.blue||0;
-  stock_red_litre.value=stock.red||0;
-  stock_curd_litre.value=stock.curd||0;
-  stock_thick_litre.value=stock.thick||0;
-
-  reverseStock("green");
-  reverseStock("blue");
-  reverseStock("red");
-  reverseStock("curd");
-  reverseStock("thick");
-
-  let supplied={green:0,blue:0,red:0,curd:0,thick:0};
+// ---------- REALTIME LOAD ----------
+db.ref("reports/"+todayDate).on("value",snap=>{
+  let data=snap.val()||{};
   let container=document.getElementById("clients");
   container.innerHTML="";
+
+  let supplied={green:0,blue:0,red:0,curd:0,thick:0};
 
   if(data.clients){
     for(let id in data.clients){
       let c=data.clients[id];
 
       container.innerHTML+=`
-      <div class="section">
-      <h3>${c.name}</h3>
-      ${clientRow(id,"Green",c.green,"green")}
-      ${clientRow(id,"Blue",c.blue,"blue")}
-      ${clientRow(id,"Red",c.red,"red")}
-      ${clientRow(id,"Curd",c.curd,"curd")}
-      ${clientRow(id,"Thick",c.thick,"thick")}
-      </div>
-      `;
+      <div class="card">
+      <b>${c.name}</b>
+      ${PRODUCTS.map(p=>clientRow(id,p,c[p])).join("")}
+      </div>`;
 
-      for(let p in supplied){
+      PRODUCTS.forEach(p=>{
         let item=c[p];
         if(item){
-          let litre = item.unit==="box"
-              ? item.qty * BOX_LITRE[p]
-              : item.qty;
+          let litre = item.unit==="B"
+            ? item.qty * BOX_LITRE[p]
+            : item.qty;
           supplied[p]+=litre;
         }
-      }
+      });
     }
   }
 
-  let balance={
-    green:(stock.green||0)-supplied.green,
-    blue:(stock.blue||0)-supplied.blue,
-    red:(stock.red||0)-supplied.red,
-    curd:(stock.curd||0)-supplied.curd,
-    thick:(stock.thick||0)-supplied.thick
-  };
+  summary.innerHTML="Balance (L) → "+
+  PRODUCTS.map(p=>{
+    let stock=data.stock?.[p];
+    let stockL=0;
 
-  document.getElementById("summary").innerHTML=
-  `<b>Balance (Litre)</b><br>
-  Green: ${balance.green} |
-  Blue: ${balance.blue} |
-  Red: ${balance.red} |
-  Curd: ${balance.curd} |
-  Thick: ${balance.thick}`;
+    if(stock){
+      stockL = stock.unit==="B"
+        ? stock.qty * BOX_LITRE[p]
+        : stock.qty;
+    }
+
+    return capitalize(p)+": "+(stockL-supplied[p]);
+  }).join(" | ");
 });
 
-function clientRow(id,label,data,key){
-  return `
-  <table>
-  <tr>
-  <td>${label}</td>
-  <td><input value="${data?.qty||0}"
-      onchange="updateClient('${id}','${key}',this.value,
-      document.getElementById('${id}_${key}_unit').value)"></td>
-  <td>
-    <select id="${id}_${key}_unit"
-      onchange="updateClient('${id}','${key}',
-      document.querySelector('[onchange*=${id}]').value,this.value)">
-      <option value="box" ${data?.unit==="box"?"selected":""}>Box</option>
-      <option value="litre" ${data?.unit==="litre"?"selected":""}>Litre</option>
-    </select>
-  </td>
-  </tr>
-  </table>
-  `;
-}
-
-// ================= WHATSAPP =================
+// ---------- WHATSAPP ----------
 function sendWhatsApp(){
-  db.ref("dailyReports/"+todayKey()).once("value").then(snap=>{
+  db.ref("reports/"+todayDate).once("value").then(snap=>{
     let data=snap.val();
     if(!data) return;
 
-    let message="*Milk Report*\nDate: "+todayKey()+"\n\n";
+    let msg="*Milk Report*\nDate: "+todayDate+"\n\n";
 
-    for(let id in data.clients){
-      let c=data.clients[id];
-      let block="";
+    if(data.clients){
+      for(let id in data.clients){
+        let c=data.clients[id];
+        let block="";
 
-      ["green","blue","red","curd","thick"].forEach(p=>{
-        let item=c[p];
-        if(item && item.qty>0){
-          let litre=item.unit==="box"
-              ? item.qty*BOX_LITRE[p]
-              : item.qty;
-          block+=p.charAt(0).toUpperCase()+p.slice(1)
-          +" "+item.qty+" "+(item.unit==="box"?"Box":"Litre")
-          +" ("+litre+" L)\n";
+        PRODUCTS.forEach(p=>{
+          let item=c[p];
+          if(item && item.qty>0){
+            block+=capitalize(p)+" "+item.qty+" "+item.unit+"\n";
+          }
+        });
+
+        if(block!=""){
+          msg+="*"+c.name+"*\n"+block+"\n";
         }
-      });
-
-      if(block!=""){
-        message+="*"+c.name+"*\n"+block+"\n";
       }
     }
 
-    window.open("https://wa.me/918497083674?text="+encodeURIComponent(message));
+    window.open("https://wa.me/918497083674?text="+encodeURIComponent(msg));
   });
+}
+
+function clientRow(id,key,data){
+  return `
+  <div class="row">
+    <div>${capitalize(key)}</div>
+    <div>
+      <input id="${id}_${key}_qty"
+        value="${data?.qty||0}"
+        onchange="updateClient('${id}','${key}')">
+      <select id="${id}_${key}_unit"
+        onchange="updateClient('${id}','${key}')">
+        <option value="B" ${data?.unit==="B"?"selected":""}>B</option>
+        <option value="L" ${data?.unit==="L"?"selected":""}>L</option>
+      </select>
+    </div>
+  </div>`;
+}
+
+function capitalize(str){
+  return str.charAt(0).toUpperCase()+str.slice(1);
 }
 
 </script>
