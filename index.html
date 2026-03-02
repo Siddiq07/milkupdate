@@ -27,13 +27,30 @@ button{padding:8px 15px;background:#1b5e20;color:white;border:none;border-radius
 <h3>Daily Stock</h3>
 <table>
 <tr><th>Product</th><th>Box</th><th>Litre</th></tr>
-<tr><td>Green</td><td><input id="stock_green_box" onchange="convertStock('green')"></td><td><input id="stock_green_litre" onchange="reverseStock('green')"></td></tr>
-<tr><td>Blue</td><td><input id="stock_blue_box" onchange="convertStock('blue')"></td><td><input id="stock_blue_litre" onchange="reverseStock('blue')"></td></tr>
-<tr><td>Red</td><td><input id="stock_red_box" onchange="convertStock('red')"></td><td><input id="stock_red_litre" onchange="reverseStock('red')"></td></tr>
-<tr><td>Curd</td><td><input id="stock_curd_box" onchange="convertStock('curd')"></td><td><input id="stock_curd_litre" onchange="reverseStock('curd')"></td></tr>
-<tr><td>Thick</td><td><input id="stock_thick_box" onchange="convertStock('thick')"></td><td><input id="stock_thick_litre" onchange="reverseStock('thick')"></td></tr>
+
+<tr><td>Green</td>
+<td><input id="stock_green_box" onchange="convertStock('green')"></td>
+<td><input id="stock_green_litre" onchange="reverseStock('green')"></td></tr>
+
+<tr><td>Blue</td>
+<td><input id="stock_blue_box" onchange="convertStock('blue')"></td>
+<td><input id="stock_blue_litre" onchange="reverseStock('blue')"></td></tr>
+
+<tr><td>Red</td>
+<td><input id="stock_red_box" onchange="convertStock('red')"></td>
+<td><input id="stock_red_litre" onchange="reverseStock('red')"></td></tr>
+
+<tr><td>Curd (15L/Box)</td>
+<td><input id="stock_curd_box" onchange="convertStock('curd')"></td>
+<td><input id="stock_curd_litre" onchange="reverseStock('curd')"></td></tr>
+
+<tr><td>Thick</td>
+<td><input id="stock_thick_box" onchange="convertStock('thick')"></td>
+<td><input id="stock_thick_litre" onchange="reverseStock('thick')"></td></tr>
+
 </table>
 <button onclick="saveStock()">Save Stock</button>
+<button onclick="sendWhatsApp()">📲 Send Report</button>
 </div>
 
 <div class="summary" id="summary"></div>
@@ -48,6 +65,7 @@ button{padding:8px 15px;background:#1b5e20;color:white;border:none;border-radius
 
 <script>
 
+// 🔥 FIREBASE CONFIG
 firebase.initializeApp({
   apiKey: "AIzaSyCnLHWvXBIBFaQ9s6S_gCN9jJFG6oWDetk",
   authDomain: "milk-7bb9b.firebaseapp.com",
@@ -55,24 +73,37 @@ firebase.initializeApp({
   projectId: "milk-7bb9b"
 });
 
-const db=firebase.database();
-const BOX_LITRE=12;
+const db = firebase.database();
+
+// 🔥 PRODUCT-WISE CONVERSION
+const BOX_LITRE = {
+  green: 12,
+  blue: 12,
+  red: 12,
+  curd: 15,   // ✅ Curd special
+  thick: 12
+};
 
 function todayKey(){
   return new Date().toLocaleDateString("en-GB");
 }
 
+// =====================
 // STOCK CONVERSION
+// =====================
 function convertStock(key){
-  let box=Number(document.getElementById("stock_"+key+"_box").value)||0;
-  document.getElementById("stock_"+key+"_litre").value=box*BOX_LITRE;
-}
-function reverseStock(key){
-  let litre=Number(document.getElementById("stock_"+key+"_litre").value)||0;
-  document.getElementById("stock_"+key+"_box").value=(litre/BOX_LITRE).toFixed(2);
+  let box = Number(document.getElementById("stock_"+key+"_box").value)||0;
+  document.getElementById("stock_"+key+"_litre").value = box * BOX_LITRE[key];
 }
 
+function reverseStock(key){
+  let litre = Number(document.getElementById("stock_"+key+"_litre").value)||0;
+  document.getElementById("stock_"+key+"_box").value = (litre / BOX_LITRE[key]).toFixed(2);
+}
+
+// =====================
 // SAVE STOCK
+// =====================
 function saveStock(){
   let stock={
     green:Number(stock_green_litre.value)||0,
@@ -84,7 +115,9 @@ function saveStock(){
   db.ref("dailyReports/"+todayKey()+"/stock").set(stock);
 }
 
+// =====================
 // ADD CLIENT
+// =====================
 function addClient(){
   let name=document.getElementById("clientName").value.trim();
   if(!name) return;
@@ -101,17 +134,22 @@ function addClient(){
   document.getElementById("clientName").value="";
 }
 
-// UPDATE BOX
+// =====================
+// UPDATE CLIENT BOX
+// =====================
 function updateBox(id,key,value){
-  let box=Number(value)||0;
-  let litre=box*BOX_LITRE;
+  let box = Number(value)||0;
+  let litre = box * BOX_LITRE[key];
+
   db.ref("dailyReports/"+todayKey()+"/clients/"+id+"/"+key).set({
     box:box,
     litre:litre
   });
 }
 
+// =====================
 // REALTIME LOAD
+// =====================
 db.ref("dailyReports/"+todayKey()).on("value",snap=>{
   let data=snap.val();
   if(!data) return;
@@ -184,7 +222,9 @@ function row(name,data,id,key){
   `;
 }
 
+// =====================
 // WHATSAPP REPORT
+// =====================
 function sendWhatsApp(){
   db.ref("dailyReports/"+todayKey()).once("value").then(snap=>{
     let data=snap.val();
@@ -208,7 +248,7 @@ function sendWhatsApp(){
       }
     }
 
-    window.open("https://wa.me/919449244108?text="+encodeURIComponent(message));
+    window.open("https://wa.me/918497083674?text="+encodeURIComponent(message));
   });
 }
 
