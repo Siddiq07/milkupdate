@@ -2,224 +2,197 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Milk Report</title>
+<title>Milk Business System</title>
 
-<!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <style>
-body{
-    font-family: Arial;
-    background:#f5f7fa;
-    padding:20px;
-}
+body{font-family:Arial;background:#f4f6f8;padding:20px;}
 h2{text-align:center;}
-.top-bar{
-    display:flex;
-    gap:10px;
-    margin-bottom:20px;
-    flex-wrap:wrap;
-}
-input[type="text"]{
-    padding:8px;
-    flex:1;
-    min-width:200px;
-}
-button{
-    padding:8px 15px;
-    border:none;
-    background:#1b5e20;
-    color:white;
-    border-radius:5px;
-    cursor:pointer;
-}
-.client{
-    background:white;
-    padding:15px;
-    margin-bottom:15px;
-    border-radius:8px;
-    box-shadow:0 2px 6px rgba(0,0,0,0.1);
-}
-table{
-    width:100%;
-    border-collapse:collapse;
-}
-th, td{
-    border:1px solid #ddd;
-    padding:6px;
-    text-align:center;
-}
-th{background:#eeeeee;}
-.qty{width:60px;}
-.unit{width:70px;}
+.top-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
+input,button{padding:8px;}
+button{background:#1b5e20;color:white;border:none;border-radius:5px;cursor:pointer;}
+.client{background:white;padding:15px;margin-bottom:15px;border-radius:8px;}
+table{width:100%;border-collapse:collapse;margin-top:10px;}
+th,td{border:1px solid #ddd;padding:6px;text-align:center;}
+.summary{background:#fff3e0;padding:10px;margin-bottom:15px;border-radius:8px;}
 </style>
 </head>
-
 <body>
 
-<h2>🥛 Milk Daily Summary</h2>
+<h2>🥛 Milk Daily System</h2>
 
 <div class="top-bar">
-    <input type="text" id="clientName" placeholder="Enter Client Name">
-    <button onclick="addClient()">+ Add Client</button>
-    <button onclick="sendWhatsApp()">📲 Send WhatsApp</button>
+<input type="number" id="stockInput" placeholder="Enter Today Stock (Litre)">
+<button onclick="saveStock()">Save Stock</button>
+<button onclick="sendWhatsApp()">📲 Send Report</button>
+</div>
+
+<div class="summary" id="summary"></div>
+
+<div class="top-bar">
+<input type="text" id="clientName" placeholder="Add Client Name">
+<button onclick="addClient()">+ Add Client</button>
 </div>
 
 <div id="clients"></div>
 
 <script>
 
-// 🔥 YOUR FIREBASE CONFIG
-const firebaseConfig = {
+// 🔥 Firebase Config
+firebase.initializeApp({
   apiKey: "AIzaSyCnLHWvXBIBFaQ9s6S_gCN9jJFG6oWDetk",
   authDomain: "milk-7bb9b.firebaseapp.com",
   databaseURL: "https://milk-7bb9b-default-rtdb.firebaseio.com",
-  projectId: "milk-7bb9b",
-  storageBucket: "milk-7bb9b.firebasestorage.app",
-  messagingSenderId: "382921009272",
-  appId: "1:382921009272:web:0b34b2ce69b791e26c258d",
-  measurementId: "G-HLCCYNKRLQ"
-};
+  projectId: "milk-7bb9b"
+});
 
-firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+const BOX_LITRE = 12;
 
+function todayKey(){
+    return new Date().toLocaleDateString("en-GB");
+}
 
-// ➕ ADD CLIENT
+// Save Stock
+function saveStock(){
+    let stock = Number(document.getElementById("stockInput").value);
+    db.ref("dailyReports/"+todayKey()+"/stock").set(stock);
+}
+
+// Add Client
 function addClient(){
-    let name = document.getElementById("clientName").value.trim();
-    if(!name) return alert("Enter client name");
+    let name=document.getElementById("clientName").value.trim();
+    if(!name) return;
 
-    db.ref("clients").push({
+    db.ref("dailyReports/"+todayKey()+"/clients").push({
         name:name,
-        products:{
-            green:{qty:0, unit:"B"},
-            blue:{qty:0, unit:"B"},
-            red:{qty:0, unit:"B"},
-            curd:{qty:0, unit:"L"},
-            thick:{qty:0, unit:"L"}
-        }
+        green:{box:0,litre:0},
+        blue:{box:0,litre:0},
+        red:{box:0,litre:0},
+        curd:{box:0,litre:0},
+        thick:{box:0,litre:0}
     });
 
     document.getElementById("clientName").value="";
 }
 
-
-// 🔄 REALTIME LOAD
-db.ref("clients").on("value", snapshot=>{
-    let data = snapshot.val();
-    let container = document.getElementById("clients");
-    container.innerHTML="";
-
+// Real-time load
+db.ref("dailyReports/"+todayKey()).on("value",snap=>{
+    let data=snap.val();
     if(!data) return;
 
-    for(let id in data){
+    document.getElementById("stockInput").value=data.stock||0;
 
-        let c = data[id];
-        let p = c.products;
+    let totalSupplied=0;
+    let container=document.getElementById("clients");
+    container.innerHTML="";
 
-        container.innerHTML += `
-        <div class="client">
+    if(data.clients){
+        for(let id in data.clients){
+
+            let c=data.clients[id];
+            totalSupplied+=calcTotal(c);
+
+            container.innerHTML+=`
+            <div class="client">
             <h3>${c.name}</h3>
-            <table>
-                <tr>
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Unit</th>
-                </tr>
-                ${row("Green", p.green, id, "green")}
-                ${row("Blue", p.blue, id, "blue")}
-                ${row("Red", p.red, id, "red")}
-                ${row("Curd", p.curd, id, "curd")}
-                ${row("Thick Curd", p.thick, id, "thick")}
-            </table>
-        </div>
-        `;
+            ${buildTable(c,id)}
+            </div>
+            `;
+        }
     }
+
+    let stock=data.stock||0;
+    let balance=stock-totalSupplied;
+
+    document.getElementById("summary").innerHTML=
+    `<b>Stock:</b> ${stock} Litre |
+     <b>Supplied:</b> ${totalSupplied} Litre |
+     <b>Balance:</b> ${balance} Litre`;
 });
 
+// Build table
+function buildTable(c,id){
+    return `
+    <table>
+    <tr><th>Product</th><th>Box</th><th>Litre</th></tr>
+    ${row("Green",c.green,id,"green")}
+    ${row("Blue",c.blue,id,"blue")}
+    ${row("Red",c.red,id,"red")}
+    ${row("Curd",c.curd,id,"curd")}
+    ${row("Thick",c.thick,id,"thick")}
+    </table>
+    `;
+}
 
-// 🧾 BUILD ROW
-function row(name, data, id, key){
+function row(name,data,id,key){
     return `
     <tr>
-        <td>${name}</td>
-        <td>
-            <input type="number" class="qty" value="${data.qty}"
-            onchange="updateQty('${id}','${key}',this.value)">
-        </td>
-        <td>
-            <select class="unit"
-            onchange="updateUnit('${id}','${key}',this.value)">
-                <option value="B" ${data.unit==="B"?"selected":""}>B</option>
-                <option value="L" ${data.unit==="L"?"selected":""}>L</option>
-            </select>
-        </td>
+    <td>${name}</td>
+    <td><input type="number" value="${data.box}" 
+    onchange="updateBox('${id}','${key}',this.value)"></td>
+    <td>${data.litre}</td>
     </tr>
     `;
 }
 
+// Update Box -> auto convert
+function updateBox(id,key,value){
+    let box=Number(value);
+    let litre=box*BOX_LITRE;
 
-// 🔄 UPDATE QTY
-function updateQty(id,key,value){
-    db.ref("clients/"+id+"/products/"+key+"/qty").set(Number(value));
+    db.ref("dailyReports/"+todayKey()+"/clients/"+id+"/"+key).set({
+        box:box,
+        litre:litre
+    });
 }
 
-// 🔄 UPDATE UNIT
-function updateUnit(id,key,value){
-    db.ref("clients/"+id+"/products/"+key+"/unit").set(value);
+// Calculate total litre
+function calcTotal(c){
+    let sum=0;
+    for(let p in c){
+        if(p==="name") continue;
+        sum+=c[p].litre||0;
+    }
+    return sum;
 }
 
-
-// 📲 SEND WHATSAPP (GREEN ALWAYS FIRST)
+// WhatsApp
 function sendWhatsApp(){
 
-    db.ref("clients").once("value").then(snapshot=>{
+    db.ref("dailyReports/"+todayKey()).once("value").then(snap=>{
+        let data=snap.val();
+        if(!data) return;
 
-        let data = snapshot.val();
-        if(!data) return alert("No data");
+        let message="*Milk Report*\nDate: "+todayKey()+"\n\n";
+        let total=0;
 
-        let message="";
-        let today = new Date().toLocaleDateString("en-GB");
-
-        message += "*Milk Report*\n";
-        message += "Date: "+today+"\n\n";
-
-        for(let id in data){
-
-            let c = data[id];
-            let p = c.products;
+        for(let id in data.clients){
+            let c=data.clients[id];
             let block="";
 
-            let order = ["green","blue","red","curd","thick"];
-
-            order.forEach(key => {
-
-                if(p[key] && p[key].qty > 0){
-
-                    let unit = p[key].unit==="B" ? "Box" : "Litre";
-                    let name = key==="thick" ? "Thick Curd" :
-                               key.charAt(0).toUpperCase()+key.slice(1);
-
-                    block += name+" "+p[key].qty+" "+unit+"\n";
+            ["green","blue","red","curd","thick"].forEach(p=>{
+                if(c[p].box>0){
+                    block+=p.charAt(0).toUpperCase()+p.slice(1)
+                    +" "+c[p].box+" Box ("+c[p].litre+" L)\n";
+                    total+=c[p].litre;
                 }
-
             });
 
             if(block!=""){
-                message += "*"+c.name+"*\n";
-                message += block+"\n";
+                message+="*"+c.name+"*\n"+block+"\n";
             }
         }
 
-        let url="https://wa.me/918497083674?text="+encodeURIComponent(message);
-        window.open(url,"_blank");
+        message+="Total Supplied: "+total+" Litre\n";
+        message+="Balance: "+(data.stock-total)+" Litre";
 
+        window.open("https://wa.me/918497083674?text="+encodeURIComponent(message));
     });
 }
 
 </script>
-
 </body>
 </html>
