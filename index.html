@@ -8,11 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <style>
-body{
-  font-family:system-ui;
-  background:#eef2f7;
-  padding:20px;
-}
+body{font-family:system-ui;background:#eef2f7;padding:20px;}
 h2{text-align:center;}
 .card{
   background:white;
@@ -61,7 +57,7 @@ button{
 <div class="summary" id="summary"></div>
 
 <div class="card">
-<input type="text" id="clientName" placeholder="Client Name">
+<input type="text" id="clientName" placeholder="New Client Name">
 <button onclick="addClient()">Add Client</button>
 </div>
 
@@ -78,20 +74,13 @@ firebase.initializeApp({
 
 const db=firebase.database();
 const PRODUCTS=["green","blue","red","curd","thick"];
-const BOX_LITRE={
-  green:12,
-  blue:12,
-  red:12,
-  curd:15,
-  thick:12
-};
+const BOX_LITRE={green:12,blue:12,red:12,curd:15,thick:12};
 
 let todayDate=new Date().toLocaleDateString("en-GB");
 document.getElementById("dateTitle").innerText="Date: "+todayDate;
 
-// ---------- BUILD STOCK UI (Default B) ----------
+// -------- BUILD STOCK --------
 const stockSection=document.getElementById("stockSection");
-
 PRODUCTS.forEach(p=>{
   stockSection.innerHTML+=`
   <div class="row">
@@ -106,7 +95,7 @@ PRODUCTS.forEach(p=>{
   </div>`;
 });
 
-// ---------- SAVE STOCK ----------
+// -------- SAVE STOCK --------
 function saveStock(){
   let stock={};
   PRODUCTS.forEach(p=>{
@@ -118,53 +107,62 @@ function saveStock(){
   db.ref("reports/"+todayDate+"/stock").set(stock);
 }
 
-// ---------- ADD CLIENT ----------
+// -------- ADD CLIENT (PERMANENT) --------
 function addClient(){
   let name=clientName.value.trim();
   if(!name) return;
 
-  let data={name:name};
-  PRODUCTS.forEach(p=>{
-    data[p]={qty:0,unit:"B"};
-  });
-
-  db.ref("reports/"+todayDate+"/clients").push(data);
+  db.ref("clients").push({name:name});
   clientName.value="";
 }
 
-// ---------- UPDATE CLIENT ----------
-function updateClient(id,key){
-  db.ref("reports/"+todayDate+"/clients/"+id+"/"+key).set({
-    qty:Number(document.getElementById(id+"_"+key+"_qty").value)||0,
-    unit:document.getElementById(id+"_"+key+"_unit").value
+// -------- UPDATE DAILY QTY --------
+function updateDaily(clientId,key){
+  db.ref("reports/"+todayDate+"/clients/"+clientId+"/"+key).set({
+    qty:Number(document.getElementById(clientId+"_"+key+"_qty").value)||0,
+    unit:document.getElementById(clientId+"_"+key+"_unit").value
   });
 }
 
-// ---------- REALTIME LOAD ----------
-db.ref("reports/"+todayDate).on("value",snap=>{
-  let data=snap.val()||{};
+// -------- LOAD CLIENTS (PERMANENT) --------
+db.ref("clients").on("value",snap=>{
+  let clientData=snap.val();
   let container=document.getElementById("clients");
   container.innerHTML="";
 
+  if(!clientData) return;
+
+  for(let id in clientData){
+    container.innerHTML+=`
+    <div class="card">
+    <b>${clientData[id].name}</b>
+    ${PRODUCTS.map(p=>clientRow(id,p)).join("")}
+    </div>`;
+  }
+});
+
+// -------- LOAD DAILY DATA --------
+db.ref("reports/"+todayDate).on("value",snap=>{
+  let data=snap.val()||{};
   let supplied={green:0,blue:0,red:0,curd:0,thick:0};
 
   if(data.clients){
-    for(let id in data.clients){
-      let c=data.clients[id];
-
-      container.innerHTML+=`
-      <div class="card">
-      <b>${c.name}</b>
-      ${PRODUCTS.map(p=>clientRow(id,p,c[p])).join("")}
-      </div>`;
-
+    for(let clientId in data.clients){
       PRODUCTS.forEach(p=>{
-        let item=c[p];
+        let item=data.clients[clientId][p];
         if(item){
-          let litre = item.unit==="B"
-            ? item.qty * BOX_LITRE[p]
+          let litre=item.unit==="B"
+            ? item.qty*BOX_LITRE[p]
             : item.qty;
           supplied[p]+=litre;
+
+          // Update input fields
+          let qtyField=document.getElementById(clientId+"_"+p+"_qty");
+          let unitField=document.getElementById(clientId+"_"+p+"_unit");
+          if(qtyField){
+            qtyField.value=item.qty;
+            unitField.value=item.unit;
+          }
         }
       });
     }
@@ -174,18 +172,16 @@ db.ref("reports/"+todayDate).on("value",snap=>{
   PRODUCTS.map(p=>{
     let stock=data.stock?.[p];
     let stockL=0;
-
     if(stock){
-      stockL = stock.unit==="B"
-        ? stock.qty * BOX_LITRE[p]
+      stockL=stock.unit==="B"
+        ? stock.qty*BOX_LITRE[p]
         : stock.qty;
     }
-
     return capitalize(p)+": "+(stockL-supplied[p]);
   }).join(" | ");
 });
 
-// ---------- WHATSAPP ----------
+// -------- WHATSAPP --------
 function sendWhatsApp(){
   db.ref("reports/"+todayDate).once("value").then(snap=>{
     let data=snap.val();
@@ -193,40 +189,42 @@ function sendWhatsApp(){
 
     let msg="*Milk Report*\nDate: "+todayDate+"\n\n";
 
-    if(data.clients){
-      for(let id in data.clients){
-        let c=data.clients[id];
+    db.ref("clients").once("value").then(clientSnap=>{
+      let clientData=clientSnap.val();
+
+      for(let clientId in clientData){
+        let name=clientData[clientId].name;
         let block="";
 
         PRODUCTS.forEach(p=>{
-          let item=c[p];
+          let item=data.clients?.[clientId]?.[p];
           if(item && item.qty>0){
             block+=capitalize(p)+" "+item.qty+" "+item.unit+"\n";
           }
         });
 
         if(block!=""){
-          msg+="*"+c.name+"*\n"+block+"\n";
+          msg+="*"+name+"*\n"+block+"\n";
         }
       }
-    }
 
-    window.open("https://wa.me/918497083674?text="+encodeURIComponent(msg));
+      window.open("https://wa.me/919449244108?text="+encodeURIComponent(msg));
+    });
   });
 }
 
-function clientRow(id,key,data){
+function clientRow(clientId,key){
   return `
   <div class="row">
     <div>${capitalize(key)}</div>
     <div>
-      <input id="${id}_${key}_qty"
-        value="${data?.qty||0}"
-        onchange="updateClient('${id}','${key}')">
-      <select id="${id}_${key}_unit"
-        onchange="updateClient('${id}','${key}')">
-        <option value="B" ${data?.unit==="B"?"selected":""}>B</option>
-        <option value="L" ${data?.unit==="L"?"selected":""}>L</option>
+      <input id="${clientId}_${key}_qty"
+        value="0"
+        onchange="updateDaily('${clientId}','${key}')">
+      <select id="${clientId}_${key}_unit"
+        onchange="updateDaily('${clientId}','${key}')">
+        <option value="B">B</option>
+        <option value="L">L</option>
       </select>
     </div>
   </div>`;
